@@ -4,9 +4,9 @@ const paymentSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: false,
+    required: false, // Allows public donations
   },
-  //Optional, because monthly contributions don't belong to a specific program
+  // Optional, because monthly contributions don't belong to a specific program
   programId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Program',

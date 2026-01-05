@@ -1,20 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const { getAccessToken, initiateSTKPush, mpesaCallback, checkPaymentStatus, getMyHistory } = require('../controllers/paymentController');
-const { protect } = require('../middleware/authMiddleware'); // Assuming you have this from before
+const { protect } = require('../middleware/authMiddleware'); 
 
-// Route to trigger payment (Must be logged in)
+// 1. Authenticated Payment Route (User logs in first)
 // URL: /api/payments/pay
 router.post('/pay', protect, getAccessToken, initiateSTKPush);
-// 2. Public Route (No 'protect' middleware)
+
+// 2. Public Payment Route (Guest checkout / No Login)
+// URL: /api/payments/public/pay
 router.post('/public/pay', getAccessToken, initiateSTKPush);
 
-// Route for Safaricom to call us back (Public)
+// 3. Callback Route (Safaricom talks to this)
 // URL: /api/payments/callback
 router.post('/callback', mpesaCallback);
-// Check status
-router.get('/status/:checkoutRequestID', protect, checkPaymentStatus);
-// Get user's history
-router.get('/history', protect, getMyHistory);
+
+// 4. Check status (Frontend checks this while spinner is loading)
+router.get('/status/:checkoutRequestID', checkPaymentStatus);
+
+// 5. Get user's history
+router.get('/myhistory', protect, getMyHistory);
 
 module.exports = router;

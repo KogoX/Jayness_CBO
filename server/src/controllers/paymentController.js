@@ -1,6 +1,6 @@
 const axios = require('axios');
 const Payment = require('../models/Payment');
-const Program = require('../models/Program'); // <--- IMPORTED PROGRAM MODEL
+const Program = require('../models/Program'); 
 
 // 1. Middleware to generate M-Pesa Access Token
 const getAccessToken = async (req, res, next) => {
@@ -48,6 +48,12 @@ const initiateSTKPush = async (req, res) => {
 
   const url = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
 
+  // Ensure Callback URL is your LIVE Render URL
+  // Example: https://jayness-cbo.onrender.com/api/payments/callback
+  const callbackURL = process.env.MPESA_CALLBACK_URL 
+    ? process.env.MPESA_CALLBACK_URL.trim() 
+    : 'https://jayness-cbo.onrender.com/api/payments/callback';
+
   const requestBody = {
     BusinessShortCode: shortCode,
     Password: password,
@@ -57,9 +63,9 @@ const initiateSTKPush = async (req, res) => {
     PartyA: phoneNumber,
     PartyB: shortCode,
     PhoneNumber: phoneNumber,
-    CallBackURL: process.env.MPESA_CALLBACK_URL.trim(),
+    CallBackURL: callbackURL,
     AccountReference: 'JaynessCBO',
-    TransactionDesc: 'Monthly Contribution',
+    TransactionDesc: 'Donation',
   };
 
   try {
@@ -72,8 +78,7 @@ const initiateSTKPush = async (req, res) => {
 
     console.log("✅ STK PUSH SUCCESS:", response.data);
 
-    // Save transaction WITH programId
-    // CRITICAL FIX: Allow user to be null (for public donations)
+    // Save transaction
     await Payment.create({
       user: req.user ? req.user._id : null, // If logged in, save ID. If not, save null.
       programId: programId || null, 
@@ -97,16 +102,19 @@ const initiateSTKPush = async (req, res) => {
 // 3. Handle Callback
 const mpesaCallback = async (req, res) => {
   try {
-    console.log("📡 CALLBACK RECEIVED:", JSON.stringify(req.body));
+    console.log("📡 CALLBACK RECEIVED");
 
     const callbackData = req.body.Body.stkCallback;
     const checkoutRequestID = callbackData.CheckoutRequestID;
 
+    // ResultCode 0 means Success
     if (callbackData.ResultCode === 0) {
       console.log("✅ Payment Successful!");
       
       const items = callbackData.CallbackMetadata.Item;
-      const receipt = items.find(item => item.Name === 'MpesaReceiptNumber').Value;
+      // Use optional chaining or find safely just in case metadata is weird
+      const receiptItem = items.find(item => item.Name === 'MpesaReceiptNumber');
+      const receipt = receiptItem ? receiptItem.Value : 'N/A';
 
       const payment = await Payment.findOne({ checkoutRequestID });
       
@@ -116,22 +124,23 @@ const mpesaCallback = async (req, res) => {
         payment.transactionDate = new Date();
         await payment.save();
         
-        // --- CRITICAL UPDATE: ADD MONEY TO PROGRAM ---
+        // --- ADD MONEY TO PROGRAM BUDGET ---
         if (payment.programId) {
           const program = await Program.findById(payment.programId);
           if (program) {
-            program.currentRaised += payment.amount;
+            // Ensure currentRaised is treated as a number
+            program.currentRaised = (program.currentRaised || 0) + payment.amount;
             await program.save();
             console.log(`🚀 Updated Program Budget: ${program.title} is now Ksh ${program.currentRaised}`);
           }
         }
-        // ---------------------------------------------
+        // -----------------------------------
       }
     } else {
-      console.log("❌ Payment Failed/Cancelled");
+      console.log("❌ Payment Failed/Cancelled (Code " + callbackData.ResultCode + ")");
       const payment = await Payment.findOne({ checkoutRequestID });
       if (payment) {
-        payment.status = 'Failed';
+        payment.status = 'Failed'; // Or 'Cancelled'
         await payment.save();
       }
     }
@@ -143,7 +152,7 @@ const mpesaCallback = async (req, res) => {
   }
 };
 
-// 4. Check Payment Status
+// 4. Check Payment Status (Frontend Polls This)
 const checkPaymentStatus = async (req, res) => {
   try {
     const { checkoutRequestID } = req.params;
