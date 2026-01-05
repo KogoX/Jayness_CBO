@@ -15,13 +15,13 @@ const app = express();
 // Middleware
 const corsOptions = {
   origin: [
-    'http://localhost:5173',
-    'http://localhost:5000',
-    'https://jayness-cbo.vercel.app/',
-    'https://vercel.com/kogoxs-projects/jayness-cbo/DMGKs9DuCQDEugLS39KyUVVkpbFJ'
+    'http://localhost:5173',            // Local Development
+    'http://localhost:5000',            // Local Server
+    'https://jayness-cbo.vercel.app'    // Production Frontend (NO trailing slash!)
   ],
   credentials: true, // Allow cookies to be sent with requests
 };
+
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -38,7 +38,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
-// --- CRITICAL FIX: STATIC FOLDER PATH ---
+// --- STATIC FOLDER PATH ---
 // Points to 'server/uploads' (Go up one level from 'src')
 const uploadsPath = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsPath));
